@@ -1,0 +1,10 @@
+.column{
+    width: 2em;
+    height: 20em;
+}
+
+.box{
+    width: 1.5em;
+    height: 3px;
+    background-color: red;
+}
