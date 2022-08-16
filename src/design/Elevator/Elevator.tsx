@@ -8,12 +8,14 @@ interface ElevatorProps{
     mtoem: number;
     frameSpeed: number;
     floors: any;
-    onFloorChange: (param: {floorIndex: number; direction: 1 | -1; elevator: ElevatorMetric}) => void;
+    onFloorChange: (param: {floorIndex: number; direction: 1 | -1}) => void;
+    onMetricChange: (metric: ElevatorMetric) => void;
 }
 
 interface ElevatorState{
     height: number; 
     direction: -1 | 0 | 1;
+    floorRequest: {index: number, up: boolean, down: boolean}[];
 }
 
 export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
@@ -23,15 +25,15 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
     MAX_EM_HEIGHT: number;
     EM_STEP: number;
     stopage: {floor: any; direction: 1 | -1;} | undefined;
-    floorRequest: {index: number, up: boolean, down: boolean}[];
+    
     requestSubscription: string | undefined;
     constructor(props: ElevatorProps){
         super(props);
         this.state = {
             height: 0,
-            direction: 0
+            direction: 0,
+            floorRequest: this.props.floors.map((f: any) => ({index: f.index, up: false, down: false}))
         }
-        this.floorRequest = this.props.floors.map((f: any) => ({index: f.index, up: false, down: false}));
         this.MAX_EM_HEIGHT = this.props.floors[this.props.floors.length-1].height*this.props.mtoem;
         this.EM_STEP = 1*this.props.mtoem/this.props.frameSpeed;
         this.boxRef = React.createRef<HTMLDivElement>();
@@ -51,9 +53,9 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
         const direction = floor.height*this.props.mtoem - this.state.height > 0 ? 1: -1;
 
         if (data.direction == 1){
-            this.floorRequest[data.floor.index].up = true;
+            this.state.floorRequest[data.floor.index].up = true;
         }else{
-            this.floorRequest[data.floor.index].down = true;
+            this.state.floorRequest[data.floor.index].down = true;
         }
         
         if (this.state.direction !==0 && this.motion){
@@ -74,10 +76,10 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
 
     private floorLimits(){
         let mini;
-        for (mini = 0; mini< this.floorRequest.length && !this.floorRequest[mini].up && !this.floorRequest[mini].up; mini++);
+        for (mini = 0; mini< this.state.floorRequest.length && !this.state.floorRequest[mini].up && !this.state.floorRequest[mini].down; mini++);
 
         let maxi;
-        for (maxi = this.floorRequest.length-1; maxi>=0 && !this.floorRequest[maxi].up && !this.floorRequest[maxi].up; maxi++);
+        for (maxi = this.state.floorRequest.length-1; maxi>=0 && !this.state.floorRequest[maxi].up && !this.state.floorRequest[maxi].down; maxi--);
 
         return {
             top: maxi,
@@ -99,39 +101,32 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
             if(this.stopage&& Math.abs(this.stopage.floor.height*this.props.mtoem - newHeight) < this.EM_STEP){
                 console.log('arrived'+ this.stopage)
                 if(this.stopage.direction === 1){
-                    this.floorRequest[this.stopage.floor.index].up = false;
-                    this.stopage.floor.onwaitUp = false
+                    this.state.floorRequest[this.stopage.floor.index].up = false;
+                    this.stopage.floor.onwaitUp = false;
                 }else{
-                    this.floorRequest[this.stopage.floor.index].down = false;
-                    this.stopage.floor.onwaitDown = false
+                    this.state.floorRequest[this.stopage.floor.index].down = false;
+                    this.stopage.floor.onwaitDown = false;
                 }
-
-                newHeight = this.stopage.floor.height*this.props.mtoem || newHeight;
-
+                
                 this.props.onFloorChange({
                     floorIndex: this.stopage.floor.index, 
                     direction: this.stopage.direction,
-                    elevator: {
-                        index: this.props.index,
-                        height: newHeight,
-                        direction: this.state.direction,
-                        stops: this.floorLimits()
-                    }
                 });
+                newHeight = this.stopage.floor.height*this.props.mtoem || newHeight;
 
                 if(this.state.direction ===1){
                     let i = this.stopage.floor.index+1;
-                    while(i< this.floorRequest.length && !this.floorRequest[i].up){i++}
-                    if (i < this.floorRequest.length){
+                    while(i< this.state.floorRequest.length && !this.state.floorRequest[i].up){i++}
+                    if (i < this.state.floorRequest.length){
                         this.stopage = {floor: this.props.floors[i], direction: 1};
                     }else{
-                        i= this.floorRequest.length -1;
-                        while(i>=0 && !this.floorRequest[i].down){i--}
+                        i= this.state.floorRequest.length -1;
+                        while(i>=0 && !this.state.floorRequest[i].down){i--}
                         if (i >=0){
                             this.stopage = {floor: this.props.floors[i], direction: -1};
                         }else{
                             i= 0;
-                            while(i < this.stopage.floor.index+1 && !this.floorRequest[i].up){i++}
+                            while(i < this.stopage.floor.index+1 && !this.state.floorRequest[i].up){i++}
                             if (i < this.stopage.floor.index+1){
                                 this.stopage = {floor: this.props.floors[i], direction: 1};
                             }else{
@@ -143,17 +138,17 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
 
                 }else{
                     let i = this.stopage.floor.index-1;
-                    while(i >=0 && !this.floorRequest[i].down){i--}
+                    while(i >=0 && !this.state.floorRequest[i].down){i--}
                     if (i >=0){
                         this.stopage = {floor: this.props.floors[i], direction: -1};
                     }else{
                         i= 0;
-                        while(i< this.floorRequest.length && !this.floorRequest[i].up){i++}
-                        if (i < this.floorRequest.length){
+                        while(i< this.state.floorRequest.length && !this.state.floorRequest[i].up){i++}
+                        if (i < this.state.floorRequest.length){
                             this.stopage = {floor: this.props.floors[i], direction: 1};
                         }else{
-                            i= this.floorRequest.length -1;
-                            while(i > this.stopage.floor.index -1 && !this.floorRequest[i].down){i--}
+                            i= this.state.floorRequest.length -1;
+                            while(i > this.stopage.floor.index -1 && !this.state.floorRequest[i].down){i--}
                             if (i > this.stopage.floor.index -1){
                                 this.stopage = {floor: this.props.floors[i], direction: -1};
                             }else{
@@ -181,6 +176,12 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
                 newHeight = this.state.height+ this.state.direction*this.EM_STEP;
             }
 
+            this.props.onMetricChange({
+                index: this.props.index,
+                height: newHeight,
+                direction: newdirection,
+                stops: this.floorLimits()
+            })
             this.setState({...this.state, height: newHeight, direction: newdirection})
             this.motion = setTimeout(this.nextStep.bind(this), delay);
         }
@@ -197,6 +198,21 @@ export class Elevator extends React.Component<ElevatorProps, ElevatorState>{
                 <div  className='d-flex justify-content-center align-items-center mt-5'>
                     <div className='column position-relative border' style={{height: `${this.MAX_EM_HEIGHT}em`}}>
                         <div ref={this.boxRef} className='box position-absolute' style={{bottom: `${this.state.height}em`, left: '0.2em'}}></div>
+                        <div className='position-absolute' style={{bottom: '0'}}>
+                            {
+                                Array.from({length: this.props.floors.length}, (_, i2)=> i2).reverse().map((x) => (
+                                    <div className='m-2'  key={`floor-buuton-${x}`}>
+                                        <button className='btn btn-success' 
+                                            onClick={()=> {this.handleRequest({floor: this.props.floors[x], direction: 1, elevatorIndex: this.props.index})}}
+                                            disabled={this.state.floorRequest[x].up || this.state.floorRequest[x].down}
+                                        >
+                                            {x}
+                                        </button>
+                                    </div>
+                                    
+                                ))
+                            }
+                        </div>
                     </div>
                 </div>
                 {/* <div className='d-flex justify-content-center align-items-center mt-5'>
